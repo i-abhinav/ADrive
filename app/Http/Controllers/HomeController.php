@@ -162,15 +162,28 @@ class HomeController extends Controller {
 			$fileSize = $file->getSize();
 			$mimeType = $file->getMimeType();
 			$directory = Auth::user()->token;
-
+			// return
 			$destinationPath = storage_path() . "/docs/" . $directory;
 			if (!File::exists($destinationPath)) {
-				Storage::makeDirectory($destinationPath, $mode = 0755, $recursive = false, $force = false);
+				File::makeDirectory($destinationPath, $mode = 0755, $recursive = true, $force = true);
 			}
 
 			$filename = time() . bin2hex(openssl_random_pseudo_bytes(12)) . "." . $extension;
 
-			$file->move($destinationPath, $filename);
+			// For moving raw file into storag/docs folder without Encryptionm
+			// $file->move($destinationPath, $filename);
+
+			// Get File Content
+			$fileContent = $file->get();
+
+			// Encrypt the Content
+			$encryptedContent = encrypt($fileContent);
+
+			// Filepath
+			$dir = $destinationPath . "/" . $filename;
+
+			// Store the encrypted Content
+			File::put($dir, $encryptedContent);
 
 			$datetime = date('Y-m-d H:i:s');
 
@@ -217,9 +230,14 @@ class HomeController extends Controller {
 			return view('errors.404-error');
 		}
 
-		$file = File::get($path);
+		//Get encrypted File content
+		$encryptedContent = File::get($path);
+		// Decrypt File content
+		$decryptedContent = decrypt($encryptedContent);
+
 		$type = File::mimeType($path);
-		$response = Response::make($file, 200);
+		// $response = Response::make($file, 200);
+		$response = Response::make($decryptedContent, 200);
 		$response->header("Content-Type", $type);
 		return $response;
 
@@ -247,7 +265,18 @@ class HomeController extends Controller {
 		$type = File::mimeType($path);
 
 		$headers = ["Content-Type: $type"];
-		return response()->download($path, $fileData->original_name, $headers);
+		// return response()->download($path, $fileData->original_name, $headers);
+
+		//Get encrypted File content
+		$encryptedContent = File::get($path);
+		// Decrypt File content
+		$decryptedContent = decrypt($encryptedContent);
+		// return Response::download($file, $fileData->original_name, $headers);
+		// return Response::make($decryptedContent, $fileData->original_name, $headers);
+		return response()->make($decryptedContent, 200, array(
+			'Content-Type' => $headers,
+			'Content-Disposition' => 'attachment; filename="' . $fileData->original_name . '"',
+		));
 	}
 
 /**
